@@ -31,7 +31,11 @@ on:
           - price
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: hsa-fund-chart-main
+  cancel-in-progress: false
 
 jobs:
   generate-chart:
@@ -47,6 +51,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -59,17 +66,23 @@ jobs:
 
       - name: Generate chart
         run: |
-          mkdir -p artifacts
           python hsa_fund_daily_chart.py \
             --fund-set "$FUND_SET" \
             --period "$CHART_PERIOD" \
             --mode "$CHART_MODE" \
-            --output "artifacts/hsa_${FUND_SET}_funds_${CHART_PERIOD}_${CHART_MODE}.png"
+            --output hsa_fund_chart.png
 
-      - name: Upload chart
-        uses: actions/upload-artifact@v7
-        with:
-          name: hsa-${{ inputs.fund_set }}-fund-chart-${{ inputs.period }}-${{ inputs.mode }}-${{ github.run_number }}
-          path: artifacts/*.png
-          if-no-files-found: error
-          retention-days: 30
+      - name: Commit chart to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --force hsa_fund_chart.png
+
+          if git diff --cached --quiet; then
+            echo "Chart is unchanged; nothing to commit."
+            exit 0
+          fi
+
+          git commit -m "Update HSA fund chart (${FUND_SET}, ${CHART_PERIOD}, ${CHART_MODE})"
+          git pull --rebase origin main
+          git push origin HEAD:main
