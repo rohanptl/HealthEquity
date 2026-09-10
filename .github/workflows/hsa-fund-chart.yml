@@ -1,0 +1,75 @@
+name: Generate HSA Fund Chart
+
+on:
+  workflow_dispatch:
+    inputs:
+      fund_set:
+        description: Funds to include
+        required: true
+        default: equity
+        type: choice
+        options:
+          - equity
+          - all
+      period:
+        description: Yahoo Finance lookback period
+        required: true
+        default: 1y
+        type: choice
+        options:
+          - 6mo
+          - 1y
+          - 2y
+          - 5y
+      mode:
+        description: Compare normalized performance or raw adjusted prices
+        required: true
+        default: normalized
+        type: choice
+        options:
+          - normalized
+          - price
+
+permissions:
+  contents: read
+
+jobs:
+  generate-chart:
+    name: Generate ${{ inputs.fund_set }} ${{ inputs.period }} ${{ inputs.mode }} chart
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      FUND_SET: ${{ inputs.fund_set }}
+      CHART_PERIOD: ${{ inputs.period }}
+      CHART_MODE: ${{ inputs.mode }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install --requirement requirements.txt
+
+      - name: Generate chart
+        run: |
+          mkdir -p artifacts
+          python hsa_fund_daily_chart.py \
+            --fund-set "$FUND_SET" \
+            --period "$CHART_PERIOD" \
+            --mode "$CHART_MODE" \
+            --output "artifacts/hsa_${FUND_SET}_funds_${CHART_PERIOD}_${CHART_MODE}.png"
+
+      - name: Upload chart
+        uses: actions/upload-artifact@v7
+        with:
+          name: hsa-${{ inputs.fund_set }}-fund-chart-${{ inputs.period }}-${{ inputs.mode }}-${{ github.run_number }}
+          path: artifacts/*.png
+          if-no-files-found: error
+          retention-days: 30
